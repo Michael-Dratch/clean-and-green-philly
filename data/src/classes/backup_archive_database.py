@@ -4,13 +4,16 @@ import subprocess
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
-from config.config import log_level, max_backup_schema_days, tiles_file_id_prefix, tile_file_backup_directory
+from classes.featurelayer import google_cloud_bucket
 from config.psql import conn, local_engine, url
 from data_utils.utils import mask_password
 from sqlalchemy import inspect
-from classes.featurelayer import google_cloud_bucket
+
+from config.config import (log_level, max_backup_schema_days,
+                           tile_file_backup_directory, tiles_file_id_prefix)
 
 log.basicConfig(level=log_level)
+
 
 backup_schema_name: str = "backup_"
 """ the prefix for the backup schemas """
@@ -45,7 +48,8 @@ class BackupArchiveDatabase:
             + ".geometry/public.geometry/' | sed 's/"
             + backup_schema_name
             + ".spatial_ref_sys/public.spatial_ref_sys/'"
-            + " | sed 's/backup__/public_/g'" # ppr_properties.public_name column needs to be restored.
+            # ppr_properties.public_name column needs to be restored.
+            + " | sed 's/backup__/public_/g'"
             + " | psql -v ON_ERROR_STOP=1 "
             + url
             + " > /dev/null "
@@ -63,7 +67,8 @@ class BackupArchiveDatabase:
             + " > /dev/null "
         )
         log.debug(mask_password(pgdump_command))
-        complete_process = subprocess.run(pgdump_command, check=False, shell=True)
+        complete_process = subprocess.run(
+            pgdump_command, check=False, shell=True)
 
         if complete_process.returncode != 0 or complete_process.stderr:
             raise RuntimeError(
@@ -107,9 +112,9 @@ class BackupArchiveDatabase:
 
         Returns:
             bool: whether true
-        """        
+        """
         return backup_schema_name in inspect(local_engine).get_schema_names()
-    
+
     def backup_tiles_file(self):
         """backup the main tiles file to a timestamped copy in the backup/ folder in GCP
         """
@@ -120,7 +125,8 @@ class BackupArchiveDatabase:
             name, ext = os.path.splitext(blob.name)
             backup_file_name: str = tile_file_backup_directory + "/" + name + suffix + ext
             log.debug(backup_file_name)
-            bucket.copy_blob(blob,destination_bucket=bucket,new_name=backup_file_name)
+            bucket.copy_blob(blob, destination_bucket=bucket,
+                             new_name=backup_file_name)
             count += 1
         if count == 0:
             log.warning("No files were found to back up.")
